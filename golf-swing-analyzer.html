@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ゴルフスウィング解析 AI コーチ</title>
+  <style>
+    :root {
+      --green: #2d6a4f;
+      --green-light: #52b788;
+      --green-dark: #1b4332;
+      --bg: #f8fdf9;
+      --card: #ffffff;
+      --text: #1e3a2f;
+      --text-muted: #5a7a6a;
+      --border: #c7e3d0;
+      --accent: #40916c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 100%);
+      color: white;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    }
+
+    .logo {
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+    }
+
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { font-size: 0.85rem; opacity: 0.8; margin-top: 2px; }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 16px;
+    }
+
+    /* API Key Section */
+    .api-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .api-section label {
+      font-weight: 600;
+      font-size: 0.9rem;
+      white-space: nowrap;
+      color: var(--green-dark);
+    }
+
+    .api-section input {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      color: var(--text);
+      background: var(--bg);
+      transition: border-color 0.2s;
+    }
+
+    .api-section input:focus {
+      outline: none;
+      border-color: var(--green-light);
+    }
+
+    .api-status {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .api-status.ok { color: var(--green); }
+
+    /* Upload Area */
+    .upload-area {
+      background: var(--card);
+      border: 2px dashed var(--border);
+      border-radius: 20px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .upload-area:hover, .upload-area.dragover {
+      border-color: var(--green-light);
+      background: #f0faf4;
+    }
+
+    .upload-area input[type="file"] {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+
+    .upload-icon { font-size: 52px; margin-bottom: 12px; }
+    .upload-area h2 { font-size: 1.2rem; color: var(--green-dark); margin-bottom: 8px; }
+    .upload-area p { color: var(--text-muted); font-size: 0.88rem; }
+
+    /* Video Preview */
+    #preview-section {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .video-wrapper {
+      background: #000;
+      position: relative;
+      text-align: center;
+    }
+
+    #preview-video {
+      max-width: 100%;
+      max-height: 400px;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .video-info {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .video-name {
+      font-weight: 600;
+      color: var(--green-dark);
+      font-size: 0.95rem;
+    }
+
+    .video-meta {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Options Panel */
+    .options-panel {
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .option-group label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .option-group select, .option-group input[type="range"] {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .frames-value {
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    /* Analyze Button */
+    .analyze-btn {
+      display: block;
+      width: 100%;
+      padding: 18px;
+      background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.25s;
+      margin-bottom: 24px;
+      letter-spacing: 0.03em;
+    }
+
+    .analyze-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(45, 106, 79, 0.4);
+    }
+
+    .analyze-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Progress */
+    #progress-section {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .progress-label {
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--green-dark);
+    }
+
+    .progress-bar-bg {
+      background: var(--border);
+      border-radius: 99px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green-light), var(--green));
+      border-radius: 99px;
+      transition: width 0.4s;
+      width: 0%;
+    }
+
+    .progress-step {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Frames Preview */
+    #frames-preview {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+
+    #frames-preview h3 {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .frames-grid {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .frame-thumb {
+      width: 100px; height: 68px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 2px solid var(--border);
+    }
+
+    /* Result Section */
+    #result-section {
+      display: none;
+    }
+
+    .result-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .result-header {
+      background: linear-gradient(135deg, var(--green-dark), var(--green));
+      color: white;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .result-header .icon { font-size: 28px; }
+    .result-header h2 { font-size: 1.1rem; font-weight: 700; }
+    .result-header p { font-size: 0.82rem; opacity: 0.75; margin-top: 2px; }
+
+    .result-body {
+      padding: 28px;
+    }
+
+    /* Score */
+    .score-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .score-item {
+      flex: 1;
+      min-width: 120px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .score-item .score-num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--green);
+      line-height: 1;
+    }
+
+    .score-item .score-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Advice Content */
+    .advice-content {
+      line-height: 1.9;
+      color: var(--text);
+      font-size: 0.95rem;
+      white-space: pre-wrap;
+    }
+
+    .advice-content h3 {
+      color: var(--green-dark);
+      font-size: 1rem;
+      margin: 20px 0 8px;
+      padding-left: 12px;
+      border-left: 4px solid var(--green-light);
+    }
+
+    .advice-content p {
+      margin-bottom: 10px;
+    }
+
+    /* Reset Button */
+    .reset-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      color: var(--green-dark);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+
+    .reset-btn:hover {
+      border-color: var(--green-light);
+      background: #f0faf4;
+    }
+
+    /* Error */
+    .error-box {
+      background: #fff3f3;
+      border: 1px solid #ffb3b3;
+      border-radius: 12px;
+      padding: 18px 20px;
+      color: #cc0000;
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    canvas { display: none; }
+
+    @media (max-width: 600px) {
+      header { padding: 16px; }
+      header h1 { font-size: 1.2rem; }
+      .container { padding: 20px 12px; }
+      .analyze-btn { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⛳</div>
+  <div>
+    <h1>ゴルフスウィング AI コーチ</h1>
+    <p>動画をアップロードするだけで、プロ並みのフォーム診断を受けられます</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- API Key -->
+  <div class="api-section">
+    <label>🔑 Claude API キー</label>
+    <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off">
+    <span class="api-status" id="api-status">未入力</span>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload-area" id="upload-area">
+    <input type="file" id="video-input" accept="video/*">
+    <div class="upload-icon">🎥</div>
+    <h2>スウィング動画をアップロード</h2>
+    <p>クリックまたはドラッグ＆ドロップで動画を選択<br>MP4, MOV, AVI対応 ・ 最大500MB</p>
+  </div>
+
+  <!-- Video Preview -->
+  <div id="preview-section">
+    <div class="video-wrapper">
+      <video id="preview-video" controls></video>
+    </div>
+    <div class="video-info">
+      <div>
+        <div class="video-name" id="video-name">動画ファイル</div>
+        <div class="video-meta" id="video-meta"></div>
+      </div>
+    </div>
+    <div class="options-panel">
+      <div class="option-group">
+        <label>解析フレーム数</label>
+        <input type="range" id="frame-count" min="4" max="12" value="8" step="1"
+               oninput="document.getElementById('frame-val').textContent=this.value">
+        <span class="frames-value" id="frame-val">8</span> フレーム
+      </div>
+      <div class="option-group">
+        <label>クラブ種別</label>
+        <select id="club-type">
+          <option value="ドライバー">ドライバー</option>
+          <option value="アイアン">アイアン</option>
+          <option value="ウェッジ">ウェッジ</option>
+          <option value="パター">パター</option>
+          <option value="不明">不明</option>
+        </select>
+      </div>
+      <div class="option-group">
+        <label>習熟度</label>
+        <select id="skill-level">
+          <option value="初心者">初心者（スコア120以上）</option>
+          <option value="中級者" selected>中級者（100前後）</option>
+          <option value="上級者">上級者（80台）</option>
+          <option value="競技者">競技者（シングル）</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analyze Button -->
+  <button class="analyze-btn" id="analyze-btn" style="display:none;" onclick="analyzeSwing()">
+    🏌️ スウィングを解析する
+  </button>
+
+  <!-- Error -->
+  <div class="error-box" id="error-box"></div>
+
+  <!-- Progress -->
+  <div id="progress-section">
+    <div class="progress-label" id="progress-label">準備中...</div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-bar"></div>
+    </div>
+    <div class="progress-step" id="progress-step"></div>
+  </div>
+
+  <!-- Frames Preview -->
+  <div id="frames-preview">
+    <h3>📸 解析フレーム</h3>
+    <div class="frames-grid" id="frames-grid"></div>
+  </div>
+
+  <!-- Result -->
+  <div id="result-section">
+    <div class="result-card">
+      <div class="result-header">
+        <div class="icon">🏆</div>
+        <div>
+          <h2>スウィング診断結果</h2>
+          <p id="result-meta">解析完了</p>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="score-row" id="score-row"></div>
+        <div class="advice-content" id="advice-content"></div>
+      </div>
+    </div>
+    <button class="reset-btn" onclick="resetAll()">🔄 別の動画を解析する</button>
+  </div>
+
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// API Key tracking
+$('api-key').addEventListener('input', function() {
+  const val = this.value.trim();
+  const status = $('api-status');
+  if (val.startsWith('sk-ant-') && val.length > 20) {
+    status.textContent = '✓ 入力済み';
+    status.className = 'api-status ok';
+  } else if (val.length > 0) {
+    status.textContent = '形式を確認してください';
+    status.className = 'api-status';
+  } else {
+    status.textContent = '未入力';
+    status.className = 'api-status';
+  }
+});
+
+// Drag & Drop
+const uploadArea = $('upload-area');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('video/')) loadVideo(file);
+});
+
+$('video-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadVideo(e.target.files[0]);
+});
+
+let videoFile = null;
+
+function loadVideo(file) {
+  videoFile = file;
+  const url = URL.createObjectURL(file);
+  $('preview-video').src = url;
+  $('video-name').textContent = file.name;
+
+  const size = (file.size / 1024 / 1024).toFixed(1);
+  $('video-meta').textContent = `${size} MB`;
+
+  $('preview-section').style.display = 'block';
+  $('analyze-btn').style.display = 'block';
+  $('upload-area').style.display = 'none';
+  $('result-section').style.display = 'none';
+  $('frames-preview').style.display = 'none';
+  hideError();
+}
+
+// Extract frames from video
+async function extractFrames(video, count) {
+  return new Promise((resolve) => {
+    const canvas = $('canvas');
+    const ctx = canvas.getContext('2d');
+    const duration = video.duration;
+    const frames = [];
+
+    // Sample from 5% to 95% of video to capture full swing
+    const startPct = 0.05;
+    const endPct = 0.95;
+    const range = endPct - startPct;
+
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 360;
+
+    let i = 0;
+
+    function captureFrame() {
+      if (i >= count) {
+        resolve(frames);
+        return;
+      }
+      const t = duration * (startPct + (range / (count - 1)) * i);
+      video.currentTime = t;
+    }
+
+    video.addEventListener('seeked', function onSeeked() {
+      if (i < count) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        frames.push(canvas.toDataURL('image/jpeg', 0.8));
+        i++;
+        if (i < count) captureFrame();
+        else {
+          video.removeEventListener('seeked', onSeeked);
+          resolve(frames);
+        }
+      }
+    });
+
+    captureFrame();
+  });
+}
+
+function setProgress(label, pct, step) {
+  $('progress-label').textContent = label;
+  $('progress-bar').style.width = pct + '%';
+  $('progress-step').textContent = step || '';
+}
+
+function showError(msg) {
+  const box = $('error-box');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+
+function hideError() {
+  $('error-box').style.display = 'none';
+}
+
+async function analyzeSwing() {
+  const apiKey = $('api-key').value.trim();
+  if (!apiKey) {
+    showError('❌ Claude APIキーを入力してください。Anthropicコンソール (console.anthropic.com) で取得できます。');
+    return;
+  }
+  if (!videoFile) {
+    showError('❌ 動画ファイルをアップロードしてください。');
+    return;
+  }
+
+  hideError();
+  $('analyze-btn').disabled = true;
+  $('analyze-btn').innerHTML = '<span class="spinner"></span>解析中...';
+  $('progress-section').style.display = 'block';
+  $('result-section').style.display = 'none';
+  $('frames-preview').style.display = 'none';
+
+  try {
+    const video = $('preview-video');
+    const frameCount = parseInt($('frame-count').value);
+    const clubType = $('club-type').value;
+    const skillLevel = $('skill-level').value;
+
+    // Step 1: Extract frames
+    setProgress('フレームを抽出中...', 20, `${frameCount}フレームをキャプチャしています`);
+    await new Promise(r => setTimeout(r, 200));
+
+    const frames = await extractFrames(video, frameCount);
+
+    // Show frame previews
+    const grid = $('frames-grid');
+    grid.innerHTML = '';
+    frames.forEach((src, i) => {
+      const img = document.createElement('img');
+      img.src = src;
+      img.className = 'frame-thumb';
+      img.title = `フレーム ${i+1}`;
+      grid.appendChild(img);
+    });
+    $('frames-preview').style.display = 'block';
+
+    setProgress('AIが画像を分析中...', 50, 'Claude Vision APIにフレームを送信しています');
+
+    // Step 2: Send to Claude API
+    const imageContents = frames.map((frame, i) => ({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: 'image/jpeg',
+        data: frame.split(',')[1]
+      }
+    }));
+
+    const systemPrompt = `あなたはプロゴルフコーチです。ゴルフスウィングの動画フレームを分析して、詳細かつ実践的なアドバイスを日本語で提供します。
+フォームの技術的な分析、改善点、良い点をバランスよく伝えてください。
+ユーザーの習熟度に合わせたアドバイスをしてください。`;
+
+    const userPrompt = `これらは${clubType}のゴルフスウィング動画から抽出した${frameCount}枚のフレームです（時系列順）。
+ユーザーの習熟度：${skillLevel}
+
+以下の点について詳しく分析してアドバイスしてください：
+
+【全体スコア】
+- 総合スコア（100点満点）
+- アドレス・グリップ（20点満点）
+- テイクバック（20点満点）
+- ダウンスウィング（20点満点）
+- インパクト（20点満点）
+- フォロースルー（20点満点）
+
+【良い点】
+フォームの優れている部分を3つ挙げてください。
+
+【改善ポイント（優先順位順）】
+1. 最も重要な改善点とその具体的な練習方法
+2. 2番目の改善点とその具体的な練習方法
+3. 3番目の改善点とその具体的な練習方法
+
+【${skillLevel}向け練習メニュー】
+今日から始められる具体的な練習ドリルを2〜3個提案してください。
+
+【まとめ】
+総合的な評価と励ましのメッセージ。
+
+フレームが不鮮明または分析しにくい場合でも、見えている範囲で最善の分析をしてください。`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [
+            ...imageContents,
+            { type: 'text', text: userPrompt }
+          ]
+        }]
+      })
+    });
+
+    setProgress('結果を生成中...', 85, '分析結果をまとめています');
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `APIエラー (${response.status})`);
+    }
+
+    const data = await response.json();
+    const advice = data.content[0].text;
+
+    setProgress('完了！', 100, '');
+    await new Promise(r => setTimeout(r, 500));
+
+    // Display result
+    $('progress-section').style.display = 'none';
+    $('result-section').style.display = 'block';
+
+    const now = new Date().toLocaleString('ja-JP');
+    $('result-meta').textContent = `${clubType} ／ ${skillLevel} ／ ${now}`;
+
+    // Parse scores from text
+    const scoreRow = $('score-row');
+    scoreRow.innerHTML = '';
+    const scoreMatches = advice.matchAll(/(\d+)\s*点/g);
+    const scoreItems = [];
+    for (const m of scoreMatches) {
+      const n = parseInt(m[1]);
+      if (n <= 100 && n >= 0) scoreItems.push(n);
+      if (scoreItems.length >= 6) break;
+    }
+
+    const labels = ['総合', 'アドレス', 'テイクバック', 'ダウン', 'インパクト', 'フォロー'];
+    if (scoreItems.length >= 1) {
+      const maxes = [100, 20, 20, 20, 20, 20];
+      scoreItems.slice(0, Math.min(scoreItems.length, 6)).forEach((score, i) => {
+        const div = document.createElement('div');
+        div.className = 'score-item';
+        const color = score / maxes[i] >= 0.8 ? '#2d6a4f' : score / maxes[i] >= 0.6 ? '#d4a017' : '#cc4444';
+        div.innerHTML = `
+          <div class="score-num" style="color:${color}">${score}</div>
+          <div class="score-label">${labels[i] || ''}${i === 0 ? '点' : `/${maxes[i]}点`}</div>`;
+        scoreRow.appendChild(div);
+      });
+    }
+
+    // Render advice with markdown-like formatting
+    let html = advice
+      .replace(/【(.+?)】/g, '<h3>$1</h3>')
+      .replace(/\n/g, '<br>');
+    $('advice-content').innerHTML = html;
+
+  } catch (err) {
+    $('progress-section').style.display = 'none';
+    showError('❌ エラーが発生しました：' + err.message);
+    $('analyze-btn').disabled = false;
+    $('analyze-btn').innerHTML = '🏌️ スウィングを解析する';
+    return;
+  }
+
+  $('analyze-btn').disabled = false;
+  $('analyze-btn').innerHTML = '🏌️ スウィングを解析する';
+}
+
+function resetAll() {
+  videoFile = null;
+  $('video-input').value = '';
+  $('preview-video').src = '';
+  $('preview-section').style.display = 'none';
+  $('analyze-btn').style.display = 'none';
+  $('upload-area').style.display = 'block';
+  $('result-section').style.display = 'none';
+  $('frames-preview').style.display = 'none';
+  $('progress-section').style.display = 'none';
+  hideError();
+}
+</script>
+</body>
+</html>
