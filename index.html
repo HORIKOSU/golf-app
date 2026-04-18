@@ -764,7 +764,39 @@ async function downloadPDF(result) {
 // ── History ──
 const LOG_KEY = 'golf_swing_logs';
 function loadHistory() { try { return JSON.parse(localStorage.getItem(LOG_KEY)||'[]'); } catch { return []; } }
-function saveToHistory(r) { const logs = loadHistory(); logs.unshift(r); if(logs.length>50) logs.pop(); localStorage.setItem(LOG_KEY, JSON.stringify(logs)); }
+
+// フレームをサムネイル化（幅160px・品質0.25）してから保存
+function compressFrames(frames) {
+  if (!frames?.length) return [];
+  return frames.map(src => {
+    try {
+      const img = new Image();
+      img.src = src;
+      const c = document.createElement('canvas');
+      c.width = 160; c.height = 90;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 160, 90);
+      return c.toDataURL('image/jpeg', 0.25);
+    } catch { return src; }
+  });
+}
+
+function saveToHistory(r) {
+  const logs = loadHistory();
+  // フレームはサムネイルに圧縮して保存
+  const toSave = { ...r, frames: compressFrames(r.frames) };
+  logs.unshift(toSave);
+  if (logs.length > 30) logs.pop();
+  try {
+    localStorage.setItem(LOG_KEY, JSON.stringify(logs));
+  } catch (e) {
+    // それでも容量超過なら古いログを削って再試行
+    while (logs.length > 1) {
+      logs.pop();
+      try { localStorage.setItem(LOG_KEY, JSON.stringify(logs)); break; } catch {}
+    }
+  }
+}
 function deleteFromHistory(id) { localStorage.setItem(LOG_KEY, JSON.stringify(loadHistory().filter(l=>l.id!==id))); renderHistory(); updateHistoryBadge(); }
 function clearAllHistory() { if(confirm('すべての診断ログを削除しますか？')) { localStorage.removeItem(LOG_KEY); renderHistory(); updateHistoryBadge(); } }
 function updateHistoryBadge() { const n=loadHistory().length; const b=$('history-badge'); if(n>0){b.textContent=n;b.style.display='';}else b.style.display='none'; }
