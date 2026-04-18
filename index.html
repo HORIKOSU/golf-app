@@ -208,8 +208,8 @@
   //  ★ 管理者設定（ここだけ変更してください）
   // ═══════════════════════════════════════════
 
-  // ① Claude APIキー（golf-swing-app専用キーを貼り付け）
-  const CLAUDE_API_KEY = "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";
+  // ① Claude APIキー（localStorageから読み込み・設定画面で入力）
+  let CLAUDE_API_KEY = localStorage.getItem('golf_claude_api_key') || '';
 
   // ② モデル選択
   // "claude-haiku-4-5-20251001" → 約2〜4円/回
@@ -232,13 +232,53 @@
   // ═══════════════════════════════════════════
 </script>
 
+<style>
+  .api-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; }
+  .api-modal-overlay.open { display:flex; }
+  .api-modal { background:#fff; border-radius:20px; padding:32px; width:90%; max-width:480px; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+  .api-modal h2 { font-size:1.1rem; font-weight:800; color:var(--green-dark); margin-bottom:8px; }
+  .api-modal p { font-size:0.85rem; color:var(--text-muted); margin-bottom:20px; line-height:1.6; }
+  .api-modal input { width:100%; padding:12px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:0.9rem; margin-bottom:16px; font-family:monospace; }
+  .api-modal input:focus { outline:none; border-color:var(--green-light); }
+  .api-modal-btns { display:flex; gap:10px; }
+  .api-modal-save { flex:1; padding:12px; background:var(--green); color:white; border:none; border-radius:10px; font-size:0.95rem; font-weight:700; cursor:pointer; }
+  .api-modal-save:hover { background:var(--green-dark); }
+  .api-modal-cancel { padding:12px 18px; background:transparent; border:1.5px solid var(--border); border-radius:10px; font-size:0.95rem; cursor:pointer; }
+  .api-status { font-size:0.75rem; padding:3px 10px; border-radius:99px; font-weight:700; }
+  .api-status.set { background:rgba(255,255,255,0.2); color:white; }
+  .api-status.unset { background:#e63946; color:white; }
+  .header-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .settings-btn { background:rgba(255,255,255,0.15); border:none; color:white; border-radius:10px; padding:8px 14px; font-size:0.85rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px; }
+  .settings-btn:hover { background:rgba(255,255,255,0.25); }
+</style>
+
 <header>
   <div class="logo">⛳</div>
   <div>
     <h1>ゴルフスウィング AI コーチ</h1>
     <p>動画をアップロードするだけで、AIがフォームを詳しく診断します</p>
   </div>
+  <div class="header-right">
+    <span class="api-status" id="api-status-badge">未設定</span>
+    <button class="settings-btn" onclick="openApiModal()">⚙️ APIキー設定</button>
+  </div>
 </header>
+
+<!-- APIキー設定モーダル -->
+<div class="api-modal-overlay" id="api-modal-overlay" onclick="closeApiModal(event)">
+  <div class="api-modal">
+    <h2>🔑 Claude APIキーの設定</h2>
+    <p>
+      Anthropicの <a href="https://console.anthropic.com" target="_blank" style="color:var(--green)">console.anthropic.com</a> でAPIキーを発行し、下に貼り付けてください。<br>
+      キーはこのブラウザにのみ保存され、外部には送信されません。
+    </p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
+    <div class="api-modal-btns">
+      <button class="api-modal-cancel" onclick="closeApiModal()">キャンセル</button>
+      <button class="api-modal-save" onclick="saveApiKey()">💾 保存する</button>
+    </div>
+  </div>
+</div>
 
 <div class="container">
 
@@ -501,8 +541,10 @@ function extractLines(text) {
 
 // ── 解析 ──
 async function analyzeSwing() {
-  if (!CLAUDE_API_KEY || CLAUDE_API_KEY === 'ここにAPIキーを貼り付けてください') {
-    showError('❌ APIキーが設定されていません。管理者にお問い合わせください。'); return;
+  if (!CLAUDE_API_KEY || !CLAUDE_API_KEY.startsWith('sk-ant-')) {
+    showError('❌ APIキーが設定されていません。右上の「⚙️ APIキー設定」から設定してください。');
+    openApiModal();
+    return;
   }
   if (!videoFile) { showError('❌ 動画ファイルをアップロードしてください。'); return; }
 
@@ -766,8 +808,39 @@ function resetAll() {
   hideError(); window.scrollTo({top:0,behavior:'smooth'});
 }
 
+// ── APIキー設定 ──
+function updateApiStatusBadge() {
+  const badge = $('api-status-badge');
+  if (CLAUDE_API_KEY && CLAUDE_API_KEY.startsWith('sk-ant-')) {
+    badge.textContent = '✅ APIキー設定済み';
+    badge.className = 'api-status set';
+  } else {
+    badge.textContent = '⚠️ APIキー未設定';
+    badge.className = 'api-status unset';
+  }
+}
+function openApiModal() {
+  $('api-key-input').value = CLAUDE_API_KEY || '';
+  $('api-modal-overlay').classList.add('open');
+}
+function closeApiModal(e) {
+  if (!e || e.target === $('api-modal-overlay')) {
+    $('api-modal-overlay').classList.remove('open');
+  }
+}
+function saveApiKey() {
+  const key = $('api-key-input').value.trim();
+  if (!key) { alert('APIキーを入力してください。'); return; }
+  if (!key.startsWith('sk-ant-')) { alert('APIキーは sk-ant- で始まる文字列です。\n正しいキーを入力してください。'); return; }
+  localStorage.setItem('golf_claude_api_key', key);
+  CLAUDE_API_KEY = key;
+  updateApiStatusBadge();
+  $('api-modal-overlay').classList.remove('open');
+  alert('✅ APIキーを保存しました！');
+}
+
 // 初期化
-if (checkExpiry()) updateHistoryBadge();
+if (checkExpiry()) { updateHistoryBadge(); updateApiStatusBadge(); }
 </script>
 </body>
 </html>
