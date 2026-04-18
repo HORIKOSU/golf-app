@@ -667,7 +667,7 @@ async function analyzeSwing() {
     const summaryRaw = parseSection(text, '【まとめ】', []);
     const now = new Date();
 
-    currentResult = { id: Date.now(), date: now.toLocaleString('ja-JP'), club, level, total, phaseScores, goodLines, improves, drillLines, summaryRaw };
+    currentResult = { id: Date.now(), date: now.toLocaleString('ja-JP'), club, level, total, phaseScores, goodLines, improves, drillLines, summaryRaw, frames };
     renderResult(currentResult);
     saveToHistory(currentResult);
     updateHistoryBadge();
@@ -783,6 +783,13 @@ function renderHistory() {
         <div class="history-expand" id="expand-${r.id}">▼</div>
       </div>
       <div class="history-body" id="hbody-${r.id}">
+        ${r.frames?.length ? `
+          <div style="margin-bottom:14px;">
+            <strong style="font-size:0.85rem;color:var(--green-dark);">📸 解析フレーム</strong>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+              ${r.frames.map((src,i)=>`<img src="${src}" style="width:88px;height:60px;border-radius:8px;object-fit:cover;border:2px solid var(--border);" title="フレーム${i+1}">`).join('')}
+            </div>
+          </div>` : ''}
         <div class="history-phases">${badges}</div>
         ${r.goodLines?.length ? `
           <strong style="font-size:0.85rem;color:var(--green-dark)">✅ 良い点</strong><br>
