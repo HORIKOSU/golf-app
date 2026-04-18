@@ -784,8 +784,32 @@ function renderHistory() {
       </div>
       <div class="history-body" id="hbody-${r.id}">
         <div class="history-phases">${badges}</div>
-        ${r.goodLines?.length?'<strong style="font-size:0.85rem;color:var(--green-dark)">良い点</strong><br>'+r.goodLines.map(l=>'✓ '+l).join('<br>')+'<br><br>':''}
-        ${r.summaryRaw?`<strong style="font-size:0.85rem;color:var(--green-dark)">コーチコメント</strong><br><div class="history-detail">${r.summaryRaw}</div>`:''}
+        ${r.goodLines?.length ? `
+          <strong style="font-size:0.85rem;color:var(--green-dark)">✅ 良い点</strong><br>
+          ${r.goodLines.map(l=>'✓ '+l).join('<br>')}
+          <br><br>` : ''}
+        ${r.improves?.some(i=>i.title) ? `
+          <strong style="font-size:0.85rem;color:var(--green-dark)">🎯 改善ポイント</strong><br>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">
+            ${r.improves.map((imp,i)=>imp.title?`
+              <div style="border-left:4px solid ${['#e63946','#f4a261','#457b9d'][i]};background:${['#fff5f5','#fffbf5','#f5f9fc'][i]};border-radius:0 8px 8px 0;padding:10px 12px;">
+                <div style="font-size:0.72rem;font-weight:800;color:${['#e63946','#f4a261','#457b9d'][i]};text-transform:uppercase;margin-bottom:3px;">${['最優先改善','2番目の改善','3番目の改善'][i]}</div>
+                <div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">${imp.title}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);line-height:1.6;">${imp.detail}</div>
+              </div>` : '').join('')}
+          </div><br>` : ''}
+        ${r.drillLines?.length ? `
+          <strong style="font-size:0.85rem;color:var(--green-dark)">🏋️ 練習メニュー</strong>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+            ${r.drillLines.map((l,i)=>`
+              <div style="background:#f0faf4;border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;">
+                <div style="background:var(--green);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${i+1}</div>
+                <div style="font-size:0.88rem;line-height:1.6;">${l}</div>
+              </div>`).join('')}
+          </div><br>` : ''}
+        ${r.summaryRaw ? `
+          <strong style="font-size:0.85rem;color:var(--green-dark)">💬 コーチコメント</strong>
+          <div class="history-detail" style="margin-top:8px;background:linear-gradient(135deg,#edf7f0,#d8f3dc);border-radius:12px;padding:14px 16px;color:var(--green-dark);">${r.summaryRaw}</div>` : ''}
       </div>
       <div class="history-actions">
         <button class="history-btn hbtn-pdf" onclick='downloadPDF(${JSON.stringify(r)})'>📄 PDF</button>
