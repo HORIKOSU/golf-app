@@ -302,7 +302,7 @@
 
     <div id="preview-section">
       <div class="video-wrapper">
-        <video id="preview-video" controls></video>
+        <video id="preview-video" controls playsinline webkit-playsinline muted></video>
       </div>
       <div class="video-info">
         <div>
@@ -476,33 +476,46 @@ function loadVideo(file) {
   };
 }
 
-// ── フレーム抽出 ──
+// ── フレーム抽出 (iOS Safari対応) ──
 async function extractFrames(video, count) {
-  return new Promise(resolve => {
-    const canvas = $('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 360;
-    const frames = []; let i = 0;
-    const maxDur = MAX_DURATION_SECONDS > 0 ? MAX_DURATION_SECONDS : Infinity;
-    const analyzeDuration = Math.min(video.duration, maxDur);
-    const startSec = analyzeDuration * 0.05;
-    const endSec   = analyzeDuration * 0.95;
-
-    function capture() {
-      video.currentTime = count === 1 ? startSec : startSec + ((endSec - startSec) / (count - 1)) * i;
-    }
-    video.addEventListener('seeked', function onSeeked() {
-      if (i < count) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        frames.push(canvas.toDataURL('image/jpeg', IMAGE_QUALITY));
-        i++;
-        if (i < count) capture();
-        else { video.removeEventListener('seeked', onSeeked); resolve(frames); }
-      }
-    });
-    capture();
+  // iOSではvideoWidthが遅れることがあるので待機
+  await new Promise(r => {
+    if (video.videoWidth > 0) return r();
+    const check = () => { if (video.videoWidth > 0) { video.removeEventListener('loadeddata', check); r(); } };
+    video.addEventListener('loadeddata', check);
+    setTimeout(r, 2000); // 最大2秒待機
   });
+
+  const canvas = $('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 360;
+
+  const maxDur = MAX_DURATION_SECONDS > 0 ? MAX_DURATION_SECONDS : Infinity;
+  const analyzeDuration = Math.min(video.duration, maxDur);
+  const startSec = analyzeDuration * 0.05;
+  const endSec   = analyzeDuration * 0.95;
+  const frames = [];
+
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? startSec : startSec + ((endSec - startSec) / (count - 1)) * i;
+    await new Promise(r => {
+      const onSeeked = () => {
+        video.removeEventListener('seeked', onSeeked);
+        // iOSはseeked後にもう1フレーム待たないと描画されない
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height); } catch {}
+            try { frames.push(canvas.toDataURL('image/jpeg', IMAGE_QUALITY)); } catch {}
+            r();
+          }, 80);
+        });
+      };
+      video.addEventListener('seeked', onSeeked);
+      video.currentTime = t;
+    });
+  }
+  return frames;
 }
 
 function setProgress(label, pct, step) {
@@ -669,7 +682,7 @@ async function analyzeSwing() {
 
     currentResult = { id: Date.now(), date: now.toLocaleString('ja-JP'), club, level, total, phaseScores, goodLines, improves, drillLines, summaryRaw, frames };
     renderResult(currentResult);
-    saveToHistory(currentResult);
+    await saveToHistory(currentResult);
     updateHistoryBadge();
     $('result-section').style.display = 'block';
     $('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -765,36 +778,44 @@ async function downloadPDF(result) {
 const LOG_KEY = 'golf_swing_logs';
 function loadHistory() { try { return JSON.parse(localStorage.getItem(LOG_KEY)||'[]'); } catch { return []; } }
 
-// フレームをサムネイル化（幅160px・品質0.25）してから保存
-function compressFrames(frames) {
+// フレームをサムネイル化（非同期・幅120px・品質0.2）
+async function compressFrames(frames) {
   if (!frames?.length) return [];
-  return frames.map(src => {
-    try {
+  const results = [];
+  for (const src of frames) {
+    await new Promise(resolve => {
       const img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = 120; c.height = 68;
+          c.getContext('2d').drawImage(img, 0, 0, 120, 68);
+          results.push(c.toDataURL('image/jpeg', 0.2));
+        } catch { /* skip */ }
+        resolve();
+      };
+      img.onerror = resolve;
       img.src = src;
-      const c = document.createElement('canvas');
-      c.width = 160; c.height = 90;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0, 160, 90);
-      return c.toDataURL('image/jpeg', 0.25);
-    } catch { return src; }
-  });
+    });
+  }
+  return results;
 }
 
-function saveToHistory(r) {
+async function saveToHistory(r) {
   const logs = loadHistory();
-  // フレームはサムネイルに圧縮して保存
-  const toSave = { ...r, frames: compressFrames(r.frames) };
+  const compressed = await compressFrames(r.frames);
+  const toSave = { ...r, frames: compressed };
   logs.unshift(toSave);
   if (logs.length > 30) logs.pop();
-  try {
-    localStorage.setItem(LOG_KEY, JSON.stringify(logs));
-  } catch (e) {
-    // それでも容量超過なら古いログを削って再試行
-    while (logs.length > 1) {
-      logs.pop();
-      try { localStorage.setItem(LOG_KEY, JSON.stringify(logs)); break; } catch {}
-    }
+  // 容量超過なら古いログを削りながら再試行、それでも無理ならフレームなしで保存
+  const tryStore = (data) => {
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(data)); return true; } catch { return false; }
+  };
+  if (!tryStore(logs)) {
+    while (logs.length > 1) { logs.pop(); if (tryStore(logs)) return; }
+    // 最終手段：フレームを除いて保存
+    const noFrames = logs.map(l => ({ ...l, frames: [] }));
+    tryStore(noFrames);
   }
 }
 function deleteFromHistory(id) { localStorage.setItem(LOG_KEY, JSON.stringify(loadHistory().filter(l=>l.id!==id))); renderHistory(); updateHistoryBadge(); }
@@ -901,6 +922,19 @@ function saveApiKey() {
   $('api-modal-overlay').classList.remove('open');
   alert('✅ APIキーを保存しました！');
 }
+
+// 古い大容量ログを初回クリーンアップ
+(function cleanupOldLogs() {
+  try {
+    const raw = localStorage.getItem(LOG_KEY);
+    if (!raw) return;
+    // 500KB超のログは古い圧縮前データとみなしてリセット
+    if (raw.length > 500000) {
+      localStorage.removeItem(LOG_KEY);
+      console.log('古い診断ログをクリアしました（容量節約）');
+    }
+  } catch {}
+})();
 
 // 初期化
 if (checkExpiry()) { updateHistoryBadge(); updateApiStatusBadge(); }
